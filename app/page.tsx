@@ -30,20 +30,7 @@ export default function Home() {
     }
   }
 
-  // 🔥 Force browser to allow autoplay by warming up each video
-  useEffect(() => {
-    videoRefs.current.forEach((vid) => {
-      if (!vid) return
-      vid.muted = true
-      vid.setAttribute('playsinline', '')
-      vid.setAttribute('webkit-playsinline', '')
-      vid.play().then(() => {
-        vid.pause()
-      }).catch(() => {})
-    })
-  }, [clips])
-
-  // 🔥 Global mute affects all videos immediately
+  // Global mute affects all videos immediately
   useEffect(() => {
     videoRefs.current.forEach((vid) => {
       if (vid) {
@@ -52,7 +39,7 @@ export default function Home() {
     })
   }, [globalMute])
 
-  // 🔥 Auto-play on scroll using IntersectionObserver
+  // Auto-play on scroll using IntersectionObserver
   useEffect(() => {
     if (!containerRef.current) return
 
@@ -66,14 +53,27 @@ export default function Home() {
           if (entry.isIntersecting) {
             setCurrentIndex(index)
 
-            // AUTO-PLAY if user didn't manually pause
-            if (!userPaused.current[index]) {
-              videoEl.muted = globalMute
-              videoEl.play().catch(() => {})
+            // Ensure video is loaded before playing
+            if (videoEl.readyState >= 2) {
+              // HAVE_CURRENT_DATA or better
+              if (!userPaused.current[index]) {
+                videoEl.muted = globalMute
+                videoEl.play().catch(() => {})
+              }
+            } else {
+              // Wait for enough data to play
+              const canPlayHandler = () => {
+                if (!userPaused.current[index]) {
+                  videoEl.muted = globalMute
+                  videoEl.play().catch(() => {})
+                }
+                videoEl.removeEventListener('canplay', canPlayHandler)
+              }
+              videoEl.addEventListener('canplay', canPlayHandler)
             }
 
-            // PRELOAD next
-            preloadNext(index)
+            // Preload adjacent videos
+            preloadAdjacent(index)
           } else {
             videoEl.pause()
           }
@@ -88,16 +88,32 @@ export default function Home() {
     return () => observer.disconnect()
   }, [clips, globalMute])
 
-  // 🔥 Preload the NEXT video before arrival
-  const preloadNext = (index: number) => {
-    const next = videoRefs.current[index + 1]
-    if (next) {
-      next.preload = "auto"
-      next.load()
-    }
+  // Preload current, previous, and next videos only
+  const preloadAdjacent = (index: number) => {
+    const indicesToPreload = [
+      index - 1, // previous
+      index,     // current
+      index + 1, // next
+    ].filter(i => i >= 0 && i < clips.length)
+
+    videoRefs.current.forEach((video, i) => {
+      if (!video) return
+      
+      if (indicesToPreload.includes(i)) {
+        // Preload nearby videos
+        video.preload = 'auto'
+        // Start loading if not already
+        if (video.readyState === 0) {
+          video.load()
+        }
+      } else {
+        // Don't preload far videos
+        video.preload = 'metadata'
+      }
+    })
   }
 
-  // 🔥 User click to toggle play/pause
+  // User click to toggle play/pause
   const togglePlay = (i: number) => {
     const v = videoRefs.current[i]
     if (!v) return
@@ -111,7 +127,7 @@ export default function Home() {
     }
   }
 
-  // manual scroll controls
+  // Manual scroll controls
   const scrollToClip = (index: number) => {
     const container = containerRef.current
     if (!container) return
@@ -147,21 +163,16 @@ export default function Home() {
           >
             <video
               ref={(el) => { videoRefs.current[i] = el! }}
-              src={clip.video_url}
+              src={`/api/proxy-video/${clip.filename}`}
               className="w-full max-w-md"
               style={{ height: 'min(90vh, 700px)', objectFit: 'contain' }}
               muted={globalMute}
               playsInline
               loop
-              preload="auto"
+              preload={i === 0 ? 'auto' : 'metadata'}
             />
 
-            <div className="absolute bottom-4 left-4 text-white flex flex-col gap-1 bg-black/30 px-3 py-2 rounded">
-              {clip.player_name && <div>{clip.player_name}</div>}
-              {clip.event_type && <div>{clip.event_type.toUpperCase()}</div>}
-              {clip.tournament && <div>🏆 {clip.tournament}</div>}
-              <div className="text-xs opacity-80">(tap to pause/play)</div>
-            </div>
+            <ClipInfo clip={clip} />
           </div>
         ))}
       </div>
@@ -173,7 +184,26 @@ export default function Home() {
   )
 }
 
-// UI components (unchanged)
+function ClipInfo({ clip }: { clip: Clip }) {
+  return (
+    <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black/80 via-black/40 to-transparent pointer-events-none">
+      <div className="max-w-md pointer-events-auto">
+        {clip.player_name && (
+          <h2 className="text-white text-2xl font-bold mb-2">{clip.player_name}</h2>
+        )}
+        {clip.event_type && (
+          <span className="inline-block bg-blue-500 text-white text-sm font-semibold px-3 py-1 rounded-full mb-2">
+            {clip.event_type.toUpperCase()}
+          </span>
+        )}
+        {clip.tournament && (
+          <p className="text-white/90 mb-2">🏆 {clip.tournament}</p>
+        )}
+        <p className="text-xs text-white/60 mt-2">(tap to pause/play)</p>
+      </div>
+    </div>
+  )
+}
 
 function Header({ globalMute, toggleGlobalMute }: { globalMute: boolean, toggleGlobalMute: () => void }) {
   return (
@@ -230,7 +260,9 @@ function NavButton({ direction, onClick }: { direction: 'up' | 'down'; onClick: 
       className={`fixed ${direction === 'up' ? 'left-4' : 'right-4'} top-1/2 -translate-y-1/2 z-40 bg-white/20 hover:bg-white/30 text-white p-4 rounded-full backdrop-blur-sm transition-all`}
       aria-label={direction === 'up' ? 'Previous clip' : 'Next clip'}
     >
-      {direction === 'up' ? '⬆️' : '⬇️'}
+      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={direction === 'up' ? "M5 15l7-7 7 7" : "M19 9l-7 7-7-7"} />
+      </svg>
     </button>
   )
 }

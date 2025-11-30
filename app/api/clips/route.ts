@@ -34,9 +34,20 @@ export async function GET(req: NextRequest) {
       .from('clips')
       .select('*')
       .order('created_at', { ascending: false })
-
+    
     if (error) throw error
-    return NextResponse.json(data)
+
+    const clipsWithFilename = data.map(clip => {
+      // Extract filename from Supabase URL
+      const filename = clip.video_url.split('/clips/')[1] // e.g., DLVkKefvn0E.mp4
+      return {
+        ...clip,
+        filename, // now each clip has a filename
+        video_url: `/api/proxy-video/${filename}` // proxy URL
+      }
+    })
+
+    return NextResponse.json(clipsWithFilename)
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 })
   }

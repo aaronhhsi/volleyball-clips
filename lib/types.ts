@@ -1,16 +1,15 @@
 export interface Clip {
   id: string
   instagram_url: string
-  thumbnail_url?: string
   player_name?: string
   tournament?: string
   event_type?: string
-  tags?: string[]
-  notes?: string
+  filename: string // required
   video_url?: string
   created_at: string
   updated_at: string
 }
+
 
 export interface ClipFormData {
   instagram_url: string
