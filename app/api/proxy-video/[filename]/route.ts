@@ -2,30 +2,29 @@ import { NextRequest, NextResponse } from 'next/server'
 
 export async function GET(
   request: NextRequest,
-  context: { params: { filename: string } } // do NOT destructure yet
+  { params }: { params: Promise<{ filename: string }> }
 ) {
-  // Await params if necessary (App Router new behavior)
-  const params = await context.params
-  const filename = params.filename
-
-  const videoUrl = `https://ftszwkmfkxxjngvkzefi.supabase.co/storage/v1/object/public/clips/${filename}`
-
   try {
+    const { filename } = await params // ✅ Await the params
+
+    const videoUrl = `https://ftszwkmfkxxjngvkzefi.supabase.co/storage/v1/object/public/clips/${filename}`
+
     const response = await fetch(videoUrl)
 
     if (!response.ok) {
-      return NextResponse.json({ error: 'Video not found' }, { status: 404 })
+      return new NextResponse('Video not found', { status: 404 })
     }
 
-    return new NextResponse(response.body, {
-      headers: {
-        'Content-Type': 'video/mp4',
-        'Cache-Control': 'public, max-age=31536000, immutable',
-        'Accept-Ranges': 'bytes',
-      },
+    const body = response.body
+    const headers = new Headers(response.headers)
+    headers.set('Cache-Control', 'public, max-age=86400, immutable')
+
+    return new NextResponse(body, {
+      status: 200,
+      headers
     })
   } catch (err) {
-    console.error(err)
-    return NextResponse.json({ error: 'Failed to fetch video' }, { status: 500 })
+    console.error('proxy error', err)
+    return new NextResponse('Internal error', { status: 500 })
   }
 }
