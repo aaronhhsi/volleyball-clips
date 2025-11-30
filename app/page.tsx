@@ -1,65 +1,252 @@
-import Image from "next/image";
+'use client'
+
+import { useEffect, useState, useRef } from 'react'
+import Link from 'next/link'
+import { Clip } from '@/lib/types'
 
 export default function Home() {
+  const [clips, setClips] = useState<Clip[]>([])
+  const [loading, setLoading] = useState(true)
+  const [currentIndex, setCurrentIndex] = useState(0)
+  const [globalMute, setGlobalMute] = useState(true)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const videoRefs = useRef<HTMLVideoElement[]>([])
+  const userPaused = useRef<boolean[]>([])
+
+  useEffect(() => {
+    fetchClips()
+  }, [])
+
+  const fetchClips = async () => {
+    setLoading(true)
+    try {
+      const response = await fetch('/api/clips')
+      const data = await response.json()
+      setClips(data)
+    } catch (error) {
+      console.error('Error fetching clips:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // 🔥 Force browser to allow autoplay by warming up each video
+  useEffect(() => {
+    videoRefs.current.forEach((vid) => {
+      if (!vid) return
+      vid.muted = true
+      vid.setAttribute('playsinline', '')
+      vid.setAttribute('webkit-playsinline', '')
+      vid.play().then(() => {
+        vid.pause()
+      }).catch(() => {})
+    })
+  }, [clips])
+
+  // 🔥 Global mute affects all videos immediately
+  useEffect(() => {
+    videoRefs.current.forEach((vid) => {
+      if (vid) {
+        vid.muted = globalMute
+      }
+    })
+  }, [globalMute])
+
+  // 🔥 Auto-play on scroll using IntersectionObserver
+  useEffect(() => {
+    if (!containerRef.current) return
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          const index = Number(entry.target.getAttribute('data-index'))
+          const videoEl = videoRefs.current[index]
+          if (!videoEl) return
+
+          if (entry.isIntersecting) {
+            setCurrentIndex(index)
+
+            // AUTO-PLAY if user didn't manually pause
+            if (!userPaused.current[index]) {
+              videoEl.muted = globalMute
+              videoEl.play().catch(() => {})
+            }
+
+            // PRELOAD next
+            preloadNext(index)
+          } else {
+            videoEl.pause()
+          }
+        })
+      },
+      { threshold: 0.55 }
+    )
+
+    const wrappers = containerRef.current.querySelectorAll('.clip-wrapper')
+    wrappers.forEach((el) => observer.observe(el))
+
+    return () => observer.disconnect()
+  }, [clips, globalMute])
+
+  // 🔥 Preload the NEXT video before arrival
+  const preloadNext = (index: number) => {
+    const next = videoRefs.current[index + 1]
+    if (next) {
+      next.preload = "auto"
+      next.load()
+    }
+  }
+
+  // 🔥 User click to toggle play/pause
+  const togglePlay = (i: number) => {
+    const v = videoRefs.current[i]
+    if (!v) return
+
+    if (v.paused) {
+      userPaused.current[i] = false
+      v.play().catch(() => {})
+    } else {
+      userPaused.current[i] = true
+      v.pause()
+    }
+  }
+
+  // manual scroll controls
+  const scrollToClip = (index: number) => {
+    const container = containerRef.current
+    if (!container) return
+    container.scrollTo({ top: index * window.innerHeight, behavior: 'smooth' })
+  }
+
+  const goToPrevious = () => currentIndex > 0 && scrollToClip(currentIndex - 1)
+  const goToNext = () => currentIndex < clips.length - 1 && scrollToClip(currentIndex + 1)
+
+  if (loading) return <LoadingScreen message="Loading clips..." />
+  if (clips.length === 0) return <EmptyScreen />
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+    <div className="relative h-screen w-screen overflow-hidden bg-black">
+      <Header
+        globalMute={globalMute}
+        toggleGlobalMute={() => setGlobalMute(!globalMute)}
+      />
+
+      <div
+        ref={containerRef}
+        className="h-screen overflow-y-scroll snap-y snap-mandatory"
+        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+      >
+        <style jsx>{`div::-webkit-scrollbar { display: none; }`}</style>
+
+        {clips.map((clip, i) => (
+          <div
+            key={clip.id}
+            data-index={i}
+            className="h-screen w-screen snap-start flex items-center justify-center clip-wrapper relative"
+            onClick={() => togglePlay(i)}
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
+            <video
+              ref={(el) => { videoRefs.current[i] = el! }}
+              src={clip.video_url}
+              className="w-full max-w-md"
+              style={{ height: 'min(90vh, 700px)', objectFit: 'contain' }}
+              muted={globalMute}
+              playsInline
+              loop
+              preload="auto"
             />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
+
+            <div className="absolute bottom-4 left-4 text-white flex flex-col gap-1 bg-black/30 px-3 py-2 rounded">
+              {clip.player_name && <div>{clip.player_name}</div>}
+              {clip.event_type && <div>{clip.event_type.toUpperCase()}</div>}
+              {clip.tournament && <div>🏆 {clip.tournament}</div>}
+              <div className="text-xs opacity-80">(tap to pause/play)</div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {currentIndex > 0 && <NavButton direction="up" onClick={goToPrevious} />}
+      {currentIndex < clips.length - 1 && <NavButton direction="down" onClick={goToNext} />}
+      <ScrollIndicator clips={clips} currentIndex={currentIndex} onScrollTo={scrollToClip} />
     </div>
-  );
+  )
+}
+
+// UI components (unchanged)
+
+function Header({ globalMute, toggleGlobalMute }: { globalMute: boolean, toggleGlobalMute: () => void }) {
+  return (
+    <div className="fixed top-0 left-0 right-0 z-50 px-4 py-4 bg-gradient-to-b from-black/70 to-transparent">
+      <div className="flex justify-between items-center">
+        <h1 className="text-white text-2xl font-bold">🏐 Volleyball Clips</h1>
+        <div className="flex gap-3 items-center">
+          <button
+            onClick={toggleGlobalMute}
+            className="bg-white/10 hover:bg-white/20 px-3 py-2 rounded text-white text-sm"
+          >
+            {globalMute ? "🔇" : "🔊"}
+          </button>
+          <Link
+            href="/add"
+            className="bg-blue-600 text-white px-4 py-2 rounded-full font-medium hover:bg-blue-700 transition text-sm"
+          >
+            + Add Clip
+          </Link>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function LoadingScreen({ message }: { message: string }) {
+  return (
+    <div className="h-screen flex items-center justify-center bg-black">
+      <div className="text-white text-xl">{message}</div>
+    </div>
+  )
+}
+
+function EmptyScreen() {
+  return (
+    <div className="h-screen flex items-center justify-center bg-black">
+      <div className="text-center">
+        <p className="text-white text-xl mb-4">No clips yet!</p>
+        <Link
+          href="/add"
+          className="bg-blue-600 text-white px-6 py-3 rounded-full font-medium hover:bg-blue-700 transition inline-block"
+        >
+          Add Your First Clip
+        </Link>
+      </div>
+    </div>
+  )
+}
+
+function NavButton({ direction, onClick }: { direction: 'up' | 'down'; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`fixed ${direction === 'up' ? 'left-4' : 'right-4'} top-1/2 -translate-y-1/2 z-40 bg-white/20 hover:bg-white/30 text-white p-4 rounded-full backdrop-blur-sm transition-all`}
+      aria-label={direction === 'up' ? 'Previous clip' : 'Next clip'}
+    >
+      {direction === 'up' ? '⬆️' : '⬇️'}
+    </button>
+  )
+}
+
+function ScrollIndicator({ clips, currentIndex, onScrollTo }: { clips: Clip[], currentIndex: number, onScrollTo: (i: number) => void }) {
+  return (
+    <div className="fixed right-4 top-1/2 -translate-y-1/2 z-30 flex flex-col gap-2" style={{ marginRight: '4.5rem' }}>
+      {clips.map((_, i) => (
+        <button
+          key={i}
+          onClick={() => onScrollTo(i)}
+          className={`w-2 h-2 rounded-full transition-all ${
+            i === currentIndex ? 'bg-white h-8' : 'bg-white/50'
+          }`}
+        />
+      ))}
+    </div>
+  )
 }
