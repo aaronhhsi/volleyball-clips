@@ -1,23 +1,26 @@
 export interface Clip {
   id: string
   instagram_url: string
-  player_name?: string
+  player_names?: string[]
   tournament?: string
-  event_type?: string
-  filename: string // required
+  player_events?: {
+    player: string | null
+    event: string | null
+  }[]
+  filename: string
   video_url?: string
   created_at: string
   updated_at: string
 }
 
-
 export interface ClipFormData {
   instagram_url: string
-  player_name: string
   tournament: string
-  event_type: string
-  tags: string[]
-  notes: string
+  player_events: {
+    player: string | null
+    event: string | null
+  }[]
 }
 
-export type EventType = 'serve' | 'kill' | 'dig' | 'block' | 'ace' | 'set' | 'other'
+// Removed 'ace'
+export type EventType = 'serve' | 'kill' | 'dig' | 'block' | 'set' | 'other'

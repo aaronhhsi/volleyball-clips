@@ -40,14 +40,15 @@ export default function AddClipForm() {
 
     try {
       const response = await fetch('/api/clips', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          instagram_url: formData.instagram_url,
-          player_events,
-          tournament: formData.tournament
-        })
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        instagram_url: formData.instagram_url,
+        player_events,
+        players: playerArray,      // <-- add this
+        tournament: formData.tournament
       })
+    })
 
       if (!response.ok) {
         const errorData = await response.json()
@@ -148,7 +149,7 @@ export default function AddClipForm() {
       {/* Tournament */}
       <div>
         <label htmlFor="tournament" className="block text-sm font-medium mb-2 text-gray-300">
-          Tournament/Game
+          Tournament/League
         </label>
         <input
           type="text"
@@ -156,7 +157,7 @@ export default function AddClipForm() {
           name="tournament"
           value={formData.tournament}
           onChange={handleChange}
-          placeholder="NCAA Finals 2024"
+          placeholder="VNL 2025"
           className="w-full px-4 py-2 bg-[#1a1d23] border border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-transparent text-gray-100 placeholder-gray-500"
           disabled={loading}
         />

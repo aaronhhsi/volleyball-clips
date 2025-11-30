@@ -73,23 +73,40 @@ export default function ClipCard({ clip }: ClipCardProps) {
         )}
       </div>
 
-      <div className="p-4">
-        {clip.player_name && <h3 className="font-bold text-lg mb-1">{clip.player_name}</h3>}
-        {clip.event_type && (
-          <span className="inline-block bg-blue-100 text-blue-800 text-xs font-semibold px-2.5 py-0.5 rounded mb-2">
-            {clip.event_type.toUpperCase()}
-          </span>
-        )}
-        {clip.tournament && <p className="text-sm text-gray-300 mb-2">🏆 {clip.tournament}</p>}
-        <a
-          href={clip.instagram_url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-sm text-blue-500 hover:text-blue-700 font-medium"
-        >
-          View on Instagram →
-        </a>
-      </div>
+    <div className="p-4">
+      {clip.player_names && clip.player_names.length > 0 && (
+        <h3 className="font-bold text-lg mb-1">
+          {clip.player_names.join(', ')}
+        </h3>
+      )}
+
+      {clip.player_events && clip.player_events.length > 0 && (
+        <div className="flex flex-wrap gap-2 mb-2">
+          {clip.player_events.map((pe, i) => (
+            <span
+              key={i}
+              className="inline-block bg-blue-100 text-blue-800 text-xs font-semibold px-2.5 py-0.5 rounded"
+            >
+              {pe.player ? `${pe.player}: ${pe.event?.toUpperCase()}` : pe.event?.toUpperCase()}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {clip.tournament && (
+        <p className="text-sm text-gray-300 mb-2">🏆 {clip.tournament}</p>
+      )}
+
+      <a
+        href={clip.instagram_url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-sm text-blue-500 hover:text-blue-700 font-medium"
+      >
+        View on Instagram →
+      </a>
+    </div>
+
     </div>
   )
 }

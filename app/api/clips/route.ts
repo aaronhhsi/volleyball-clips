@@ -4,18 +4,29 @@ import { downloadVideo } from '@/lib/downloadAndUploadClip'
 
 export async function POST(req: NextRequest) {
   const body = await req.json()
+
   try {
     // 1️⃣ Download and upload video
     const video_url = await downloadVideo(body.instagram_url)
 
-    // 2️⃣ Insert clip into Supabase
+    // 2️⃣ Extract filename from video_url
+    const filename = video_url.split('/clips/')[1] // e.g., DNdyZ2Zx6zw.mp4
+
+    // 3️⃣ Extract player names from body.players
+    const player_names: string[] = Array.isArray(body.players)
+      ? body.players.filter(Boolean)
+      : []
+
+    // 4️⃣ Insert clip into Supabase
     const { data, error } = await supabase
       .from('clips')
       .insert({
+        instagram_url: body.instagram_url,
         video_url,
-        player_events: body.player_events,
+        filename,
         tournament: body.tournament,
-        instagram_url: body.instagram_url
+        player_events: body.player_events,
+        player_names
       })
       .select()
       .single()
@@ -27,6 +38,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: err.message }, { status: 500 })
   }
 }
+
 
 export async function GET(req: NextRequest) {
   try {
