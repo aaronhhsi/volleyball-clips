@@ -11,10 +11,9 @@ export default function Home() {
   const [globalMute, setGlobalMute] = useState(true)
   const containerRef = useRef<HTMLDivElement>(null)
 
-  // Use nullable refs because we won't always have an element at every index
   const videoRefs = useRef<(HTMLVideoElement | null)[]>([])
   const userPaused = useRef<boolean[]>([])
-  const loadedIndices = useRef<Set<number>>(new Set()) // prevent duplicate loads
+  const loadedIndices = useRef<Set<number>>(new Set())
 
   useEffect(() => {
     fetchClips()
@@ -26,12 +25,11 @@ export default function Home() {
       const response = await fetch('/api/clips')
       let data: Clip[] = await response.json()
 
-      // Move the specific video to the first position
       const firstFilename = "DPbbK-0CTvm.mp4"
       data.sort((a, b) => {
-        if (a.filename === firstFilename) return -1  // a goes first
-        if (b.filename === firstFilename) return 1   // b goes first
-        return 0                                     // keep original order otherwise
+        if (a.filename === firstFilename) return -1
+        if (b.filename === firstFilename) return 1
+        return 0
       })
 
       setClips(data)
@@ -42,19 +40,14 @@ export default function Home() {
     }
   }
 
-  // Keep mute synced
   useEffect(() => {
     videoRefs.current.forEach((v) => {
       if (v) v.muted = globalMute
     })
   }, [globalMute])
 
-  // Helper: which indices should currently have src (current, prev, next)
-  const isPreloadIndex = (i: number) => {
-    return Math.abs(i - currentIndex) <= 1
-  }
+  const isPreloadIndex = (i: number) => Math.abs(i - currentIndex) <= 1
 
-  // Auto-play on scroll using IntersectionObserver (keeps original logic)
   useEffect(() => {
     if (!containerRef.current) return
 
@@ -70,25 +63,29 @@ export default function Home() {
           if (entry.isIntersecting) {
             setCurrentIndex(index)
 
-            // If enough data available — play (respecting user pause)
-            if (videoEl.readyState >= 2) {
-              if (!userPaused.current[index]) {
-                videoEl.muted = globalMute
-                videoEl.play().catch(() => {})
-              }
-            } else {
-              const canPlayHandler = () => {
-                if (!userPaused.current[index]) {
-                  videoEl.muted = globalMute
-                  videoEl.play().catch(() => {})
-                }
-                videoEl.removeEventListener('canplay', canPlayHandler)
-              }
-              videoEl.addEventListener('canplay', canPlayHandler)
-            }
+            // Pause all other videos immediately
+            videoRefs.current.forEach((v, i) => {
+              if (!v) return
+              if (i !== index) v.pause()
+            })
 
-            // We still call preloadAdjacent (keeps backward-compatibility)
-            // actual load is handled by the useEffect below when currentIndex changes
+            // Autoplay logic
+            if (!userPaused.current[index]) {
+              if (videoEl.readyState >= 2) {
+                // Video is already loaded → play immediately
+                videoEl.play().catch(() => {})
+              } else {
+                // Video not loaded → wait for canplay
+                const canPlayHandler = () => {
+                  // Only play if still current and user hasn't paused
+                  if (!userPaused.current[index] && index === currentIndex) {
+                    videoEl.play().catch(() => {})
+                  }
+                  videoEl.removeEventListener('canplay', canPlayHandler)
+                }
+                videoEl.addEventListener('canplay', canPlayHandler)
+              }
+            }
           } else {
             videoEl.pause()
           }
@@ -103,7 +100,6 @@ export default function Home() {
     return () => observer.disconnect()
   }, [clips, globalMute])
 
-  // When currentIndex or clips change, ensure adjacent videos have src and are loaded once.
   useEffect(() => {
     if (!clips || clips.length === 0) return
 
@@ -114,39 +110,13 @@ export default function Home() {
       const video = videoRefs.current[i]
       if (!video) return
 
-      // If this index hasn't been loaded yet and the video element is ready, call load()
-      if (!loadedIndices.current.has(i)) {
-        // If src is set by React (see render), .load() will fetch; only do it if readyState === 0
-        if (video.readyState === 0) {
-          try {
-            video.load()
-          } catch (e) {
-            // ignore
-          }
-        }
+      if (!loadedIndices.current.has(i) && video.readyState === 0) {
+        try { video.load() } catch { }
         loadedIndices.current.add(i)
       }
     })
-    // Note: we deliberately do not remove loadedIndices when leaving viewport;
-    // keeping loadedIndices prevents duplicate network requests.
   }, [currentIndex, clips])
 
-  // PreloadAdjacent kept for compatibility; it only sets preload attr now.
-  const preloadAdjacent = (index: number) => {
-    const indicesToPreload = [index - 1, index, index + 1].filter(i => i >= 0 && i < clips.length);
-
-    videoRefs.current.forEach((video, i) => {
-      if (!video) return;
-
-      if (indicesToPreload.includes(i)) {
-        video.preload = 'auto';
-      } else {
-        video.preload = 'metadata';
-      }
-    });
-  };
-
-  // User click to toggle play/pause
   const togglePlay = (i: number) => {
     const v = videoRefs.current[i]
     if (!v) return
@@ -159,16 +129,6 @@ export default function Home() {
       v.pause()
     }
   }
-
-  // Manual scroll controls
-  const scrollToClip = (index: number) => {
-    const container = containerRef.current
-    if (!container) return
-    container.scrollTo({ top: index * window.innerHeight, behavior: 'smooth' })
-  }
-
-  const goToPrevious = () => currentIndex > 0 && scrollToClip(currentIndex - 1)
-  const goToNext = () => currentIndex < clips.length - 1 && scrollToClip(currentIndex + 1)
 
   if (loading) return <LoadingScreen message="Loading clips..." />
   if (clips.length === 0) return <EmptyScreen />
@@ -194,7 +154,6 @@ export default function Home() {
             className="h-screen w-screen snap-start flex items-center justify-center clip-wrapper relative"
             onClick={() => togglePlay(i)}
           >
-            {/* Only provide src for current / prev / next to avoid browser fetching everything */}
             <video
               ref={(el) => { videoRefs.current[i] = el }}
               src={isPreloadIndex(i) ? `/api/proxy-video/${clip.filename}` : undefined}
@@ -210,9 +169,6 @@ export default function Home() {
           </div>
         ))}
       </div>
-
-      {currentIndex > 0 && <NavButton direction="up" onClick={goToPrevious} />}
-      {currentIndex < clips.length - 1 && <NavButton direction="down" onClick={goToNext} />}
     </div>
   )
 }
