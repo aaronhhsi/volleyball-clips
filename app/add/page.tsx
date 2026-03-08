@@ -16,7 +16,7 @@ export default function AddClipPage() {
         
         <h1 className="text-4xl text-gray-600 font-bold mb-2">Add New Clip</h1>
         <p className="text-gray-600 mb-8">
-          Add a volleyball clip from Instagram to your database
+          Upload the clip to YouTube (unlisted), then paste the URL here with metadata.
         </p>
         
         <div className="bg-black rounded-lg shadow-md p-8">

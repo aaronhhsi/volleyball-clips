@@ -1,14 +1,21 @@
 'use client'
 
 import { useEffect, useState, useRef } from 'react'
-import Link from 'next/link'
 import { Clip } from '@/lib/types'
+import { Trie } from '@/lib/trie'
+import PlayerSearch from '@/components/PlayerSearch'
+import YouTubeFeed from '@/components/YouTubeFeed'
+
+type ViewMode = 'native' | 'youtube'
 
 export default function Home() {
   const [clips, setClips] = useState<Clip[]>([])
   const [loading, setLoading] = useState(true)
   const [currentIndex, setCurrentIndex] = useState(0)
   const [globalMute, setGlobalMute] = useState(true)
+  const [playerFilter, setPlayerFilter] = useState<string>('')
+  const [trie, setTrie] = useState<Trie | null>(null)
+  const [viewMode, setViewMode] = useState<ViewMode>('native')
   const containerRef = useRef<HTMLDivElement>(null)
 
   const videoRefs = useRef<(HTMLVideoElement | null)[]>([])
@@ -33,6 +40,13 @@ export default function Home() {
       })
 
       setClips(data)
+
+      const t = new Trie()
+      data.forEach((clip: Clip) => {
+        clip.player_names?.forEach(name => t.insert(name))
+        if (clip.tournament) t.insert(clip.tournament)
+      })
+      setTrie(t)
     } catch (error) {
       console.error('Error fetching clips:', error)
     } finally {
@@ -130,6 +144,13 @@ export default function Home() {
     }
   }
 
+  const filteredClips = playerFilter
+    ? clips.filter(clip =>
+        clip.player_names?.some(n => n.toLowerCase() === playerFilter.toLowerCase()) ||
+        clip.tournament?.toLowerCase() === playerFilter.toLowerCase()
+      )
+    : clips
+
   if (loading) return <LoadingScreen message="Loading clips..." />
   if (clips.length === 0) return <EmptyScreen />
 
@@ -138,37 +159,51 @@ export default function Home() {
       <Header
         globalMute={globalMute}
         toggleGlobalMute={() => setGlobalMute(!globalMute)}
+        trie={trie}
+        playerFilter={playerFilter}
+        onPlayerFilter={setPlayerFilter}
+        viewMode={viewMode}
+        setViewMode={setViewMode}
       />
 
-      <div
-        ref={containerRef}
-        className="h-screen overflow-y-scroll snap-y snap-mandatory"
-        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-      >
-        <style jsx>{`div::-webkit-scrollbar { display: none; }`}</style>
+      {viewMode === 'youtube' ? (
+        <YouTubeFeed globalMute={globalMute} />
+      ) : (
+        <div
+          ref={containerRef}
+          className="h-screen overflow-y-scroll snap-y snap-mandatory"
+          style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+        >
+          <style jsx>{`div::-webkit-scrollbar { display: none; }`}</style>
 
-        {clips.map((clip, i) => (
-          <div
-            key={clip.id}
-            data-index={i}
-            className="h-screen w-screen snap-start flex items-center justify-center clip-wrapper relative"
-            onClick={() => togglePlay(i)}
-          >
-            <video
-              ref={(el) => { videoRefs.current[i] = el }}
-              src={isPreloadIndex(i) ? `/api/proxy-video/${clip.filename}` : undefined}
-              className="w-full max-w-md"
-              style={{ height: 'min(90vh, 700px)', objectFit: 'contain' }}
-              muted={globalMute}
-              playsInline
-              loop
-              preload={isPreloadIndex(i) ? 'auto' : 'metadata'}
-            />
+          {filteredClips.length === 0 && (
+            <div className="h-screen flex items-center justify-center">
+              <p className="text-white/60 text-lg">No clips found for &quot;{playerFilter}&quot;</p>
+            </div>
+          )}
+          {filteredClips.map((clip, i) => (
+            <div
+              key={clip.id}
+              data-index={i}
+              className="h-screen w-screen snap-start flex items-center justify-center clip-wrapper relative"
+              onClick={() => togglePlay(i)}
+            >
+              <video
+                ref={(el) => { videoRefs.current[i] = el }}
+                src={isPreloadIndex(i) ? `/api/proxy-video/${clip.filename}` : undefined}
+                className="w-full max-w-md"
+                style={{ height: 'min(90vh, 700px)', objectFit: 'contain' }}
+                muted={globalMute}
+                playsInline
+                loop
+                preload={isPreloadIndex(i) ? 'auto' : 'metadata'}
+              />
 
-            <ClipInfo clip={clip} />
-          </div>
-        ))}
-      </div>
+              <ClipInfo clip={clip} />
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -205,24 +240,49 @@ function ClipInfo({ clip }: { clip: Clip }) {
 }
 
 
-function Header({ globalMute, toggleGlobalMute }: { globalMute: boolean, toggleGlobalMute: () => void }) {
+function Header({
+  globalMute,
+  toggleGlobalMute,
+  trie,
+  playerFilter,
+  onPlayerFilter,
+  viewMode,
+  setViewMode,
+}: {
+  globalMute: boolean
+  toggleGlobalMute: () => void
+  trie: Trie | null
+  playerFilter: string
+  onPlayerFilter: (player: string) => void
+  viewMode: ViewMode
+  setViewMode: (mode: ViewMode) => void
+}) {
   return (
     <div className="fixed top-0 left-0 right-0 z-50 px-4 py-4 bg-gradient-to-b from-black/70 to-transparent">
       <div className="flex justify-between items-center">
-        <h1 className="text-white text-2xl font-bold">🏐 Volleyball Clips</h1>
-        <div className="flex gap-3 items-center">
+        <h1 className="text-white text-2xl font-bold">Volleyball Clips</h1>
+        <div className="flex gap-2 items-center">
+          <PlayerSearch trie={trie} playerFilter={playerFilter} onPlayerFilter={onPlayerFilter} />
+          <div className="flex bg-white/10 rounded overflow-hidden text-white text-sm">
+            <button
+              onClick={() => setViewMode('native')}
+              className={`px-3 py-2 transition-colors ${viewMode === 'native' ? 'bg-white/20' : 'hover:bg-white/10'}`}
+            >
+              Native
+            </button>
+            <button
+              onClick={() => setViewMode('youtube')}
+              className={`px-3 py-2 transition-colors ${viewMode === 'youtube' ? 'bg-white/20' : 'hover:bg-white/10'}`}
+            >
+              YT
+            </button>
+          </div>
           <button
             onClick={toggleGlobalMute}
             className="bg-white/10 hover:bg-white/20 px-3 py-2 rounded text-white text-sm"
           >
             {globalMute ? "🔇" : "🔊"}
           </button>
-          <Link
-            href="/add"
-            className="bg-blue-600 text-white px-4 py-2 rounded-full font-medium hover:bg-blue-700 transition text-sm"
-          >
-            + Add Clip
-          </Link>
         </div>
       </div>
     </div>
@@ -240,15 +300,7 @@ function LoadingScreen({ message }: { message: string }) {
 function EmptyScreen() {
   return (
     <div className="h-screen flex items-center justify-center bg-black">
-      <div className="text-center">
-        <p className="text-white text-xl mb-4">No clips yet!</p>
-        <Link
-          href="/add"
-          className="bg-blue-600 text-white px-6 py-3 rounded-full font-medium hover:bg-blue-700 transition inline-block"
-        >
-          Add Your First Clip
-        </Link>
-      </div>
+      <p className="text-white text-xl">No clips yet!</p>
     </div>
   )
 }

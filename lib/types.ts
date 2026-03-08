@@ -1,13 +1,14 @@
 export interface Clip {
   id: string
-  instagram_url: string
+  source_url?: string
+  youtube_id?: string
   player_names?: string[]
   tournament?: string
   player_events?: {
     player: string | null
     event: string | null
   }[]
-  filename: string
+  filename?: string
   video_url?: string
   created_at: string
   updated_at: string

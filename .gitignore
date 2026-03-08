@@ -45,3 +45,10 @@ temp/
 
 # vscode
 .vscode/
+
+# admin devtools (local only, not deployed)
+app/add/
+app/api/download-video/
+app/api/admin/
+components/AddClipForm.tsx
+lib/downloadAndUploadClip.ts
