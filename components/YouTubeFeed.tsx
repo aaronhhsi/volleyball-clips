@@ -1,13 +1,7 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
-
-// Placeholder YouTube Shorts for comparison
-const DEMO_CLIPS = [
-  { id: '7mq25dEP_0E', label: 'Demo 1' },
-  { id: 'jOqpKUtAfxU', label: 'Demo 2' },
-  { id: 'tNzyrtqFvSY', label: 'Demo 3' },
-]
+import { Clip } from '@/lib/types'
 
 // Minimal YT type declarations — avoids needing @types/youtube
 declare global {
@@ -38,8 +32,8 @@ interface YTPlayer {
   destroy(): void
 }
 
-export default function YouTubeFeed({ globalMute }: { globalMute: boolean }) {
-  const playersRef = useRef<(YTPlayer | null)[]>(DEMO_CLIPS.map(() => null))
+export default function YouTubeFeed({ clips, globalMute }: { clips: Clip[]; globalMute: boolean }) {
+  const playersRef = useRef<(YTPlayer | null)[]>(clips.map(() => null))
   const containerRef = useRef<HTMLDivElement>(null)
   const mutedRef = useRef(globalMute)
   const readyCountRef = useRef(0)
@@ -59,12 +53,12 @@ export default function YouTubeFeed({ globalMute }: { globalMute: boolean }) {
     const prevCallback = window.onYouTubeIframeAPIReady
 
     const initPlayers = () => {
-      DEMO_CLIPS.forEach((clip, i) => {
+      clips.forEach((clip, i) => {
         const el = document.getElementById(`yt-player-${i}`)
         if (!el) return
 
         const player = new window.YT.Player(el, {
-          videoId: clip.id,
+          videoId: clip.youtube_id,
           playerVars: {
             playsinline: 1,
             rel: 0,
@@ -116,10 +110,11 @@ export default function YouTubeFeed({ globalMute }: { globalMute: boolean }) {
       // doesn't fire if the script loads after this component unmounts
       window.onYouTubeIframeAPIReady = prevCallback
       playersRef.current.forEach(p => { try { p?.destroy() } catch { } })
-      playersRef.current = DEMO_CLIPS.map(() => null)
+      playersRef.current = clips.map(() => null)
       readyCountRef.current = 0
     }
-  }, [])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // clips are stable on mount — parent uses key prop to remount on filter change
 
   // IntersectionObserver: play the clip in view, pause the rest
   useEffect(() => {
@@ -178,16 +173,15 @@ export default function YouTubeFeed({ globalMute }: { globalMute: boolean }) {
       `}</style>
       <style jsx>{`div::-webkit-scrollbar { display: none; }`}</style>
 
-      {DEMO_CLIPS.map((clip, i) => (
+      {clips.map((clip, i) => (
         <div
           key={clip.id}
           data-index={i}
           className="h-screen w-screen snap-start flex items-center justify-center yt-wrapper"
         >
-          {/* Container sized to match the native player */}
           <div
             className="relative overflow-hidden yt-player-inner"
-            style={{ height: 'min(90vh, 700px)', aspectRatio: '9/16' }}
+            style={{ height: '100vh', aspectRatio: '9/16' }}
           >
             <div id={`yt-player-${i}`} className="w-full h-full" />
           </div>

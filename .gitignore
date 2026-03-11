@@ -52,3 +52,4 @@ app/api/download-video/
 app/api/admin/
 components/AddClipForm.tsx
 lib/downloadAndUploadClip.ts
+yt-dlp.exe

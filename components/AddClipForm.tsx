@@ -3,13 +3,6 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 
-function extractYouTubeId(url: string): string | null {
-  const match = url.match(
-    /(?:youtube\.com\/(?:shorts\/|watch\?v=)|youtu\.be\/)([^?&\s/]+)/
-  )
-  return match ? match[1] : null
-}
-
 export default function AddClipForm() {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
@@ -17,13 +10,12 @@ export default function AddClipForm() {
   const [success, setSuccess] = useState('')
 
   const [formData, setFormData] = useState({
-    youtube_url: '',
+    instagram_url: '',
     players: '',
     events: '',
+    teams: '',
     tournament: '',
   })
-
-  const previewId = extractYouTubeId(formData.youtube_url)
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value })
@@ -32,8 +24,8 @@ export default function AddClipForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!previewId) {
-      setError('Could not extract a YouTube video ID from that URL.')
+    if (!formData.instagram_url.includes('instagram.com/reel')) {
+      setError('Please enter a valid Instagram reel URL.')
       return
     }
     setLoading(true)
@@ -52,9 +44,9 @@ export default function AddClipForm() {
         throw new Error(data.error || 'Failed to add clip')
       }
 
-      setSuccess('Clip added!')
-      setFormData({ youtube_url: '', players: '', events: '', tournament: '' })
-      setTimeout(() => router.push('/'), 1200)
+      setSuccess('Clip uploaded to YouTube and saved!')
+      setFormData({ instagram_url: '', players: '', events: '', teams: '', tournament: '' })
+      setTimeout(() => router.push('/'), 1500)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong')
     } finally {
@@ -63,7 +55,7 @@ export default function AddClipForm() {
   }
 
   const inputClass =
-    'w-full px-4 py-2 bg-[#1a1d23] border border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-transparent text-gray-100 placeholder-gray-500 disabled:opacity-50'
+    'w-full px-4 py-2 bg-[#1a1d23] border border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-transparent text-white placeholder-gray-400 disabled:opacity-50'
 
   return (
     <form
@@ -71,8 +63,9 @@ export default function AddClipForm() {
       className="max-w-2xl mx-auto space-y-6 relative bg-[#0d0f13] text-gray-200 p-6 rounded-xl shadow-xl border border-gray-800"
     >
       {loading && (
-        <div className="absolute inset-0 bg-black/70 flex items-center justify-center z-50 rounded-xl backdrop-blur-sm">
+        <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center z-50 rounded-xl backdrop-blur-sm gap-4">
           <div className="w-12 h-12 border-4 border-gray-400 border-t-transparent rounded-full animate-spin" />
+          <p className="text-gray-300 text-sm">Downloading and uploading to YouTube… this may take a minute.</p>
         </div>
       )}
 
@@ -88,40 +81,23 @@ export default function AddClipForm() {
         </div>
       )}
 
-      {/* YouTube URL */}
+      {/* Instagram URL */}
       <div>
-        <label htmlFor="youtube_url" className="block text-sm font-medium mb-2 text-gray-300">
-          YouTube Shorts URL *
+        <label htmlFor="instagram_url" className="block text-sm font-medium mb-2 text-gray-300">
+          Instagram Reel URL *
         </label>
         <input
           type="url"
-          id="youtube_url"
-          name="youtube_url"
+          id="instagram_url"
+          name="instagram_url"
           required
-          value={formData.youtube_url}
+          value={formData.instagram_url}
           onChange={handleChange}
-          placeholder="https://youtube.com/shorts/..."
+          placeholder="https://www.instagram.com/reel/..."
           className={inputClass}
           disabled={loading}
         />
-        {formData.youtube_url && (
-          <p className={`mt-1 text-xs ${previewId ? 'text-green-400' : 'text-red-400'}`}>
-            {previewId ? `Video ID: ${previewId}` : 'Could not detect a YouTube video ID'}
-          </p>
-        )}
       </div>
-
-      {/* Thumbnail preview */}
-      {previewId && (
-        <div className="flex justify-center">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={`https://img.youtube.com/vi/${previewId}/hqdefault.jpg`}
-            alt="YouTube thumbnail"
-            className="rounded-lg w-48 border border-gray-700"
-          />
-        </div>
-      )}
 
       {/* Players */}
       <div>
@@ -143,7 +119,7 @@ export default function AddClipForm() {
       {/* Events */}
       <div>
         <label htmlFor="events" className="block text-sm font-medium mb-2 text-gray-300">
-          Events (comma separated, paired with players above)
+          Events (comma separated, paired with players)
         </label>
         <input
           type="text"
@@ -160,6 +136,23 @@ export default function AddClipForm() {
         </p>
       </div>
 
+      {/* Teams */}
+      <div>
+        <label htmlFor="teams" className="block text-sm font-medium mb-2 text-gray-300">
+          Teams (comma separated, paired with players)
+        </label>
+        <input
+          type="text"
+          id="teams"
+          name="teams"
+          value={formData.teams}
+          onChange={handleChange}
+          placeholder="BYU, UCLA"
+          className={inputClass}
+          disabled={loading}
+        />
+      </div>
+
       {/* Tournament */}
       <div>
         <label htmlFor="tournament" className="block text-sm font-medium mb-2 text-gray-300">
@@ -171,7 +164,7 @@ export default function AddClipForm() {
           name="tournament"
           value={formData.tournament}
           onChange={handleChange}
-          placeholder="VNL 2025"
+          placeholder="NCAA 2025"
           className={inputClass}
           disabled={loading}
         />
@@ -179,13 +172,13 @@ export default function AddClipForm() {
 
       <button
         type="submit"
-        disabled={loading || !previewId}
+        disabled={loading}
         className="w-full bg-blue-700 hover:bg-blue-600 text-white py-3 px-6 rounded-lg font-medium disabled:bg-gray-600 disabled:cursor-not-allowed transition flex items-center justify-center gap-2"
       >
         {loading && (
           <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
         )}
-        {loading ? 'Adding...' : 'Add Clip'}
+        {loading ? 'Processing...' : 'Add Clip'}
       </button>
     </form>
   )

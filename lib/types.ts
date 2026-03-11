@@ -1,26 +1,15 @@
 export interface Clip {
   id: string
-  source_url?: string
-  youtube_id?: string
+  youtube_id: string
   player_names?: string[]
   tournament?: string
   player_events?: {
     player: string | null
     event: string | null
+    team: string | null
   }[]
-  filename?: string
-  video_url?: string
   created_at: string
   updated_at: string
-}
-
-export interface ClipFormData {
-  instagram_url: string
-  tournament: string
-  player_events: {
-    player: string | null
-    event: string | null
-  }[]
 }
 
 // Removed 'ace'
